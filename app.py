@@ -220,39 +220,34 @@ def user_dashboard():
     return render_template('user_dashboard.html', lots=lots, active_res=active_res, history=history)
 
 
-@app.route('/user/reserve/<int:lot_id>', methods=['GET', 'POST'])
+@app.route('/user/reserve/<int:lot_id>')
 def reserve_spot(lot_id):
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
 
-    lot = ParkingLot.query.get_or_404(lot_id)
-    available_spots = ParkingSpot.query.filter_by(lot_id=lot.id, status='A').all()
-
     # Check if user already has an active reservation
     existing = Reservation.query.filter_by(user_id=user_id, release_time=None).first()
     if existing:
-        return "You already have an active reservation."
+        return 'You already have an active reservation.'
 
-    if request.method == 'POST':
-        spot_id = int(request.form['spot_id'])
-        spot = ParkingSpot.query.get_or_404(spot_id)
+    # Find first available spot
+    spot = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').first()
+    if not spot:
+        return "No available spots in this lot."
 
-        # Final check that spot is still available
-        if spot.status != 'A':
-            return "Selected spot is no longer available."
+    # Reserve it
+    spot.status = 'O'
+    reservation = Reservation(
+        user_id=user_id,
+        spot_id=spot.id,
+        parking_time=datetime.now()
+    )
+    db.session.add(reservation)
+    db.session.commit()
 
-        spot.status = 'O'
-        new_res = Reservation(
-            user_id=user_id,
-            spot_id=spot.id,
-            parking_time=datetime.now()
-        )
-        db.session.add(new_res)
-        db.session.commit()
-        return redirect(url_for('user_dashboard'))
+    return redirect(url_for('user_dashboard'))
 
-    return render_template('reserve_spot.html', lot=lot, spots=available_spots)
 
 
 @app.route('/user/release/<int:reservation_id>')
