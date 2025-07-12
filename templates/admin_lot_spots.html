@@ -2,8 +2,6 @@
 {% block content %}
 <h2>Parking Spots in Lot: {{ lot.name }}</h2>
 
-<a class="btn btn-secondary mb-3" href="{{ url_for('admin_dashboard') }}">Back to Dashboard</a>
-
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -24,11 +22,13 @@
                 {% endif %}
             </td>
             <td>
-                {% if spot.status == 'A' %}
-                    <a href="{{ url_for('delete_spot', spot_id=spot.id) }}" class="btn btn-danger btn-sm">Delete</a>
-                {% else %}
-                    <button class="btn btn-secondary btn-sm" disabled>Cannot Delete</button>
-                {% endif %}
+                <td>
+                    {% if spot.status == 'A' %}
+                        <a href="{{ url_for('delete_spot', spot_id=spot.id) }}" class="btn btn-danger btn-sm">Delete</a>
+                    {% else %}
+                        <a href="{{ url_for('spot_details', spot_id=spot.id) }}" class="btn btn-info btn-sm">View Details</a>
+                    {% endif %}
+                </td>
             </td>
         </tr>
         {% endfor %}

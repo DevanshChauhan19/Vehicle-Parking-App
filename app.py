@@ -170,6 +170,18 @@ def add_lot():
 
     return render_template('add_lot.html')
 
+@app.route('/admin/spot/<int:spot_id>/details')
+def spot_details(spot_id):
+    if session.get('user') != 'admin':
+        return redirect(url_for('login'))
+
+    spot = ParkingSpot.query.get_or_404(spot_id)
+
+    # Get latest reservation for this spot
+    reservation = Reservation.query.filter_by(spot_id=spot.id).order_by(Reservation.parking_time.desc()).first()
+
+    return render_template('admin_spot_details.html', spot=spot, reservation=reservation)
+
 @app.route('/admin/lot/<int:lot_id>/spots')
 def view_lot_spots(lot_id):
     if session.get('user') != 'admin':
@@ -205,6 +217,51 @@ def delete_lot(lot_id):
         db.session.commit()
 
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/search')
+def admin_search():
+    if session.get('user') != 'admin':
+        return redirect(url_for('login'))
+
+    query = request.args.get('query', '')
+    results = []
+
+    if query:
+        results = ParkingLot.query.filter(
+            (ParkingLot.name.ilike(f"%{query}%")) |
+            (ParkingLot.pin_code.ilike(f"%{query}%"))
+        ).all()
+
+    return render_template('admin_search.html', lots=results, query=query)
+
+@app.route('/admin/summary')
+def admin_summary():
+    if session.get('user') != 'admin':
+        return redirect(url_for('login'))
+
+    lots = ParkingLot.query.all()
+
+    # Chart 1: Revenue from each parking lot (assume cost is stored per reservation)
+    labels = []
+    revenues = []
+    for lot in lots:
+        lot_revenue = sum(
+            res.cost or 0 for spot in lot.spots for res in spot.reservations
+        )
+        labels.append(lot.name)
+        revenues.append(round(lot_revenue, 2))
+
+    # Chart 2: Available vs. Occupied
+    available_spots = sum(1 for lot in lots for spot in lot.spots if spot.status == 'A')
+    occupied_spots = sum(1 for lot in lots for spot in lot.spots if spot.status == 'O')
+
+    return render_template(
+        'admin_summary.html',
+        labels=labels,
+        revenues=revenues,
+        available_spots=available_spots,
+        occupied_spots=occupied_spots
+    )
 
 @app.route('/user/dashboard')
 def user_dashboard():

@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Admin Dashboard</h2>
-<a class="btn btn-info mb-3" href="{{ url_for('admin_users') }}">View Users</a>
-<a class="btn btn-warning mb-3" href="{{ url_for('admin_reservations') }}">View Reservations</a>
-<a class="btn btn-primary mb-3" href="{{ url_for('add_lot') }}">Add Parking Lot</a>
-
-<form method="GET" class="d-flex mb-3" action="{{ url_for('admin_dashboard') }}">
-    <input type="text" name="query" class="form-control me-2" placeholder="Search by name or pincode" value="{{ query }}">
-    <button type="submit" class="btn btn-outline-primary">Search</button>
-</form>
 
 <table class="table table-bordered">
     <thead>
@@ -41,103 +33,4 @@
         {% endfor %}
     </tbody>
 </table>
-<h3 class="mt-5">Reservations Summary</h3>
-<canvas id="lotChart" width="400" height="150"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    const ctx = document.getElementById('lotChart').getContext('2d');
-    const lotChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: {{ chart_labels | tojson }},
-            datasets: [{
-                label: 'Total Reservations per Lot',
-                data: {{ chart_data | tojson }},
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1 }
-                }
-            }
-        }
-    });
-</script>
-<h3 class="mt-5">Spot Availability Summary</h3>
-<canvas id="spotChart" width="400" height="150"></canvas>
-
-<script>
-    const spotCtx = document.getElementById('spotChart').getContext('2d');
-    const spotChart = new Chart(spotCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Available', 'Occupied'],
-            datasets: [{
-                data: [{{ available_spots }}, {{ occupied_spots }}],
-                backgroundColor: [
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(255, 99, 132, 0.6)'
-                ],
-                borderColor: [
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(255, 99, 132, 1)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-</script>
-<h3 class="mt-5">Reservations Per User</h3>
-<canvas id="userChart" width="400" height="150"></canvas>
-
-<script>
-    const userCtx = document.getElementById('userChart').getContext('2d');
-    const userChart = new Chart(userCtx, {
-        type: 'bar',
-        data: {
-            labels: {{ user_labels | tojson }},
-            datasets: [{
-                label: 'Reservations',
-                data: {{ user_counts | tojson }},
-                backgroundColor: 'rgba(153, 102, 255, 0.6)',
-                borderColor: 'rgba(153, 102, 255, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1 }
-                }
-            }
-        }
-    });
-</script>
 {% endblock %}
