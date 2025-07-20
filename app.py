@@ -107,8 +107,21 @@ def admin_dashboard():
 
     user_labels = [u[0] for u in user_data]
     user_counts = [u[1] for u in user_data]
+    
+    rating_labels = []
+    rating_values = []
+    for lot in lots:
+        rated_reservations = Reservation.query.join(ParkingSpot).filter(
+            ParkingSpot.lot_id == lot.id,
+            Reservation.rating != None
+        ).all()
 
-    return render_template('admin_dashboard.html', lots=lots,query=query,chart_labels=labels,chart_data=data,available_spots=available_spots,occupied_spots=occupied_spots,user_labels=user_labels,user_counts=user_counts)
+        if rated_reservations:
+            avg_rating = sum(r.rating for r in rated_reservations) / len(rated_reservations)
+            rating_labels.append(lot.name)
+            rating_values.append(round(avg_rating, 2))
+
+    return render_template('admin_dashboard.html', lots=lots,query=query,chart_labels=labels,chart_data=data,available_spots=available_spots,occupied_spots=occupied_spots,user_labels=user_labels,user_counts=user_counts,rating_labels=rating_labels,rating_values=rating_values)
 
 @app.route('/admin/users')
 def admin_users():
@@ -277,34 +290,38 @@ def user_dashboard():
     return render_template('user_dashboard.html', lots=lots, active_res=active_res, history=history)
 
 
-@app.route('/user/reserve/<int:lot_id>')
+@app.route('/user/reserve/<int:lot_id>', methods=['GET', 'POST'])
 def reserve_spot(lot_id):
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
 
-    # Check if user already has an active reservation
-    existing = Reservation.query.filter_by(user_id=user_id, release_time=None).first()
-    if existing:
-        return 'You already have an active reservation.'
+    if request.method == 'POST':
+        vehicle_number = request.form['vehicle_number']
 
-    # Find first available spot
-    spot = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').first()
-    if not spot:
-        return "No available spots in this lot."
+        # Find first available spot
+        spot = ParkingSpot.query.filter_by(lot_id=lot_id, status='A').first()
+        if not spot:
+            return "No available spots in this lot."
 
-    # Reserve it
-    spot.status = 'O'
-    reservation = Reservation(
-        user_id=user_id,
-        spot_id=spot.id,
-        parking_time=datetime.now()
-    )
-    db.session.add(reservation)
-    db.session.commit()
+        # Prevent double reservation
+        existing = Reservation.query.filter_by(user_id=user_id, release_time=None).first()
+        if existing:
+            return 'You already have an active reservation.'
 
-    return redirect(url_for('user_dashboard'))
+        spot.status = 'O'
+        reservation = Reservation(
+            user_id=user_id,
+            spot_id=spot.id,
+            vehicle_number=vehicle_number,
+            parking_time=datetime.now()
+        )
+        db.session.add(reservation)
+        db.session.commit()
 
+        return redirect(url_for('user_dashboard'))
+
+    return render_template('user_reserve.html')
 
 
 @app.route('/user/release/<int:reservation_id>')
@@ -324,6 +341,43 @@ def release_spot(reservation_id):
     db.session.commit()
 
     return redirect(url_for('user_dashboard'))
+
+@app.route('/user/feedback')
+def user_feedback():
+    user_id = session.get('user')
+    if not isinstance(user_id, int):
+        return redirect(url_for('login'))
+
+    reservations = (
+        Reservation.query
+        .filter_by(user_id=user_id)
+        .filter(Reservation.release_time.isnot(None))
+        .order_by(Reservation.parking_time.desc())
+        .all()
+    )
+    return render_template('user_feedback.html', reservations=reservations)
+
+
+@app.route('/user/rating/<int:reservation_id>', methods=['POST'])
+def submit_rating(reservation_id):
+    user_id = session.get('user')
+    if not isinstance(user_id, int):
+        return redirect(url_for('login'))
+
+    reservation = Reservation.query.get_or_404(reservation_id)
+    if reservation.user_id != user_id:
+        return "Unauthorized", 403
+
+    try:
+        rating = float(request.form['rating'])
+        if not (0.5 <= rating <= 5.0):
+            return "Invalid rating", 400
+    except ValueError:
+        return "Invalid input", 400
+
+    reservation.rating = rating
+    db.session.commit()
+    return redirect(url_for('user_feedback'))
 
 
 @app.route('/logout')
