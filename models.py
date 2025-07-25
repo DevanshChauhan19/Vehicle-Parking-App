@@ -5,13 +5,19 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    is_admin = db.Column(db.Boolean, default=False)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     address=db.Column(db.String(200),nullable=False)
     pincode=db.Column(db.Integer,nullable=False)
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id'), nullable=False)
     reservations = db.relationship('Reservation', backref='user', lazy=True)
+
+class Role(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+
+    users = db.relationship('User', backref='role', lazy=True)
 
 
 class ParkingLot(db.Model):

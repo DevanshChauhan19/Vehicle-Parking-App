@@ -1,7 +1,7 @@
 # app/routes/auth.py
 from flask import render_template, request, redirect, session, url_for, Flask
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, ParkingLot,ParkingSpot,Reservation
+from models import db, User,Role, ParkingLot,ParkingSpot,Reservation
 import os
 from datetime import datetime
 
@@ -23,8 +23,8 @@ def register():
         email = request.form['email']
         password = request.form['password']
         name = request.form['name']
-        address=request.form['address']
-        pincode=request.form['pincode']
+        address = request.form['address']
+        pincode = request.form['pincode']
 
         if User.query.filter_by(email=email).first():
             return 'Email already registered.'
@@ -38,8 +38,21 @@ def register():
         if not pincode.isdigit() or len(pincode) != 6:
             return 'Invalid pincode.'
 
+        user_role = Role.query.filter_by(name='user').first()
+        if not user_role:
+            return 'Default role not found. Please contact admin.', 500
+
         hashed_pw = generate_password_hash(password)
-        new_user = User(name=name, email=email, password_hash=hashed_pw,address=address,pincode=pincode)
+
+        new_user = User(
+            name=name,
+            email=email,
+            password_hash=hashed_pw,
+            address=address,
+            pincode=pincode,
+            role_id=user_role.id
+        )
+
         db.session.add(new_user)
         db.session.commit()
         return redirect(url_for('login'))
@@ -53,8 +66,9 @@ def login():
         email = request.form['email']
         password = request.form['password']
         user = User.query.filter_by(email=email).first()
+
         if user and check_password_hash(user.password_hash, password):
-            if user.is_admin:
+            if user.role and user.role.name == 'admin':
                 session['user'] = 'admin'
                 return redirect(url_for('admin_dashboard'))
             else:
@@ -64,7 +78,6 @@ def login():
         return 'Invalid credentials.'
 
     return render_template('login.html', page='login')
-
 
 @app.route('/admin/dashboard')
 def admin_dashboard():
@@ -100,7 +113,8 @@ def admin_dashboard():
     user_data = (
         db.session.query(User.name, db.func.count(Reservation.id))
         .join(Reservation)
-        .filter(User.is_admin == False)
+        .join(Role)
+        .filter(Role.name == 'user')
         .group_by(User.name)
         .all()
     )
@@ -127,16 +141,16 @@ def admin_dashboard():
 def admin_users():
     if session.get('user') != 'admin':
         return redirect(url_for('login'))
-
+    
     query = request.args.get('query', '')
+    users_query = User.query.join(Role).filter(Role.name == 'user')
+    
     if query:
         users = User.query.filter(
-            User.is_admin == False,
             (User.name.ilike(f"%{query}%")) |
             (User.email.ilike(f"%{query}%"))
-        ).all()
-    else:
-        users = User.query.filter_by(is_admin=False).all()
+        )
+    users = users_query.all()
         
     return render_template('admin_users.html', users=users, query=query)
 
@@ -378,6 +392,44 @@ def submit_rating(reservation_id):
     reservation.rating = rating
     db.session.commit()
     return redirect(url_for('user_feedback'))
+
+@app.route('/user/summary')
+def user_summary():
+    user_id = session.get('user')
+    if not isinstance(user_id, int):
+        return redirect(url_for('login'))
+
+    # Reservation count per lot
+    lot_data = (
+        db.session.query(ParkingLot.name, db.func.count(Reservation.id))
+        .join(ParkingSpot, ParkingSpot.lot_id == ParkingLot.id)
+        .join(Reservation, Reservation.spot_id == ParkingSpot.id)
+        .filter(Reservation.user_id == user_id)
+        .group_by(ParkingLot.name)
+        .all()
+    )
+    lot_labels = [row[0] for row in lot_data]
+    lot_counts = [row[1] for row in lot_data]
+
+    # Average rating per lot
+    rating_data = (
+        db.session.query(ParkingLot.name, db.func.avg(Reservation.rating))
+        .join(ParkingSpot, ParkingSpot.lot_id == ParkingLot.id)
+        .join(Reservation, Reservation.spot_id == ParkingSpot.id)
+        .filter(Reservation.user_id == user_id, Reservation.rating != None)
+        .group_by(ParkingLot.name)
+        .all()
+    )
+    rating_labels = [row[0] for row in rating_data]
+    rating_values = [round(row[1], 2) for row in rating_data]
+
+    return render_template(
+        'user_summary.html',
+        lot_labels=lot_labels,
+        lot_counts=lot_counts,
+        rating_labels=rating_labels,
+        rating_values=rating_values
+    )
 
 
 @app.route('/logout')
