@@ -13,6 +13,11 @@
     </div>
 </div>
 
+<div class="mt-5">
+    <h5>Average Ratings per Parking Lot</h5>
+    <canvas id="ratingChart" width="400" height="200"></canvas>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     // Chart 1: Revenue per lot (doughnut)
@@ -61,6 +66,29 @@
             },
             scales: {
                 y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Chart 3: Average Ratings per Lot
+    new Chart(document.getElementById('ratingChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ lot_data | map(attribute='name') | list | tojson }},
+            datasets: [{
+                label: 'Average Rating',
+                data: {{ lot_data | map(attribute='avg_rating') | list | tojson }},
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 5
+                }
             }
         }
     });

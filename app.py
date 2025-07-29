@@ -1,5 +1,5 @@
 # app/routes/auth.py
-from flask import render_template, request, redirect, session, url_for, Flask
+from flask import render_template, request, redirect, session, url_for, Flask,flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User,Role, ParkingLot,ParkingSpot,Reservation
 import os
@@ -314,6 +314,9 @@ def delete_lot(lot_id):
             db.session.delete(spot)
         db.session.delete(lot)
         db.session.commit()
+        flash('Parking lot deleted successfully.', 'success')
+    else:
+        flash('Cannot delete lot: One or more spots are still occupied.', 'danger')
 
     return redirect(url_for('admin_dashboard'))
 
@@ -353,14 +356,40 @@ def admin_summary():
     # Chart 2: Available vs. Occupied
     available_spots = sum(1 for lot in lots for spot in lot.spots if spot.status == 'A')
     occupied_spots = sum(1 for lot in lots for spot in lot.spots if spot.status == 'O')
+    
+    lot_data = []
+
+    for lot in lots:
+        ratings = []
+        for spot in lot.spots:
+            for res in spot.reservations:
+                if res.rating is not None:
+                    ratings.append(res.rating)
+        avg_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
+        lot_data.append({
+            'name': lot.name,
+            'total_spots': lot.max_spots,
+            'available_spots': sum(1 for s in lot.spots if s.status == 'A'),
+            'avg_rating': avg_rating
+        })
 
     return render_template(
         'admin_summary.html',
         labels=labels,
         revenues=revenues,
         available_spots=available_spots,
-        occupied_spots=occupied_spots
+        occupied_spots=occupied_spots,
+        lot_data=lot_data
     )
+
+@app.route('/admin/feedback')
+def admin_feedback():
+    if session.get('role') not in ['admin', 'collaborator']:
+        return redirect(url_for('login'))
+
+    feedbacks = Reservation.query.filter(Reservation.rating != None).order_by(Reservation.parking_time.desc()).all()
+    return render_template('admin_feedback.html', feedbacks=feedbacks)
+
 
 @app.route('/user/dashboard')
 def user_dashboard():
