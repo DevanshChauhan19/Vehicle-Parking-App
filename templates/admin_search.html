@@ -31,7 +31,9 @@
             <td>{{ lot.spots | selectattr('status', 'equalto', 'A') | list | length }}/{{ lot.spots|length }}</td>
             <td>
                 <a href="{{ url_for('view_lot_spots', lot_id=lot.id) }}" class="btn btn-info btn-sm">View Spots</a>
+                {% if session['role'] == 'admin' %}
                 <a href="{{ url_for('delete_lot', lot_id=lot.id) }}" class="btn btn-danger btn-sm">Delete</a>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

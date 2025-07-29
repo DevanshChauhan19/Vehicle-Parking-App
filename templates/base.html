@@ -24,7 +24,7 @@
 
     <div class="collapse navbar-collapse" id="navbarText">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        {% if session.get('user') == 'admin' %}
+        {% if session.get('role') == 'admin' %}
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Home</a>
           </li>
@@ -37,7 +37,17 @@
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('admin_summary') }}">Summary</a>
           </li>
-        {% elif session.get('user') %}
+          {% elif session.get('role') == 'collaborator' %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_summary') }}">Summary</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_search') }}">Search</a>
+          </li>
+        {% elif session.get('role') == 'user' %}
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('user_dashboard') }}">Home</a>
           </li>
@@ -51,7 +61,7 @@
       </ul>
 
       <span class="navbar-text">
-        {% if session.get('user') %}
+        {% if session.get('role')%}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">Logout</a>
         {% else %}
           <a class="btn btn-outline-primary btn-sm me-2" href="{{ url_for('login') }}">Login</a>

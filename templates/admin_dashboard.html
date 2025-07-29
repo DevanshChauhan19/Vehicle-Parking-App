@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Admin Dashboard</h2>
-<a href="{{ url_for('add_lot') }}" class="btn btn-primary">Add Parking Lot</a>
+{% if session['role'] == 'admin' %}
+    <a href="{{ url_for('add_lot') }}" class="btn btn-primary">Add Parking Lot</a>
+    <a href="{{ url_for('create_collaborator') }}" class="btn btn-outline-secondary">Add Collaborator</a>
+{% endif %}
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -27,7 +30,9 @@
             </td>
             <td>
                 <a href="{{ url_for('view_lot_spots', lot_id=lot.id) }}" class="btn btn-info btn-sm">View Spots</a>
+                {% if session['role'] == 'admin' %}
                 <a href="{{ url_for('delete_lot', lot_id=lot.id) }}" class="btn btn-danger btn-sm">Delete Lot</a>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

@@ -68,20 +68,22 @@ def login():
         user = User.query.filter_by(email=email).first()
 
         if user and check_password_hash(user.password_hash, password):
-            if user.role and user.role.name == 'admin':
-                session['user'] = 'admin'
+            session['user'] = user.id
+            session['role'] = user.role.name.lower() if user.role else None
+
+            if user.role.name == 'admin' or user.role.name == 'collaborator':
                 return redirect(url_for('admin_dashboard'))
-            else:
-                session['user'] = user.id
+            elif session['role'] == 'user':
                 return redirect(url_for('user_dashboard'))
 
         return 'Invalid credentials.'
 
     return render_template('login.html', page='login')
 
+
 @app.route('/admin/dashboard')
 def admin_dashboard():
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     query = request.args.get('query', '')
@@ -97,7 +99,7 @@ def admin_dashboard():
     labels = []
     data = []
     for lot in lots:
-        count = sum(len(spot.reservations) for spot in lot.spots)
+        count = sum(spot.reservations.count() for spot in lot.spots)
         labels.append(lot.name)
         data.append(count)
     
@@ -137,26 +139,96 @@ def admin_dashboard():
 
     return render_template('admin_dashboard.html', lots=lots,query=query,chart_labels=labels,chart_data=data,available_spots=available_spots,occupied_spots=occupied_spots,user_labels=user_labels,user_counts=user_counts,rating_labels=rating_labels,rating_values=rating_values)
 
+@app.route('/admin/create_collaborator', methods=['GET', 'POST'])
+def create_collaborator():
+    if session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        password = request.form['password']
+        address = request.form['address']
+        pincode = request.form['pincode']
+
+        if User.query.filter_by(email=email).first():
+            return 'Email already exists.'
+
+        if not name or not email or not password or not address or not pincode:
+            return 'All fields are required.'
+
+        if len(password) < 6:
+            return 'Password must be at least 6 characters.'
+
+        if not pincode.isdigit() or len(pincode) != 6:
+            return 'Invalid pincode.'
+
+        collab_role = Role.query.filter_by(name='collaborator').first()
+        if not collab_role:
+            collab_role = Role(name='collaborator')
+            db.session.add(collab_role)
+            db.session.commit()
+
+        hashed_pw = generate_password_hash(password)
+        user = User(
+            name=name,
+            email=email,
+            password_hash=hashed_pw,
+            address=address,
+            pincode=pincode,
+            role_id=collab_role.id
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        return redirect(url_for('admin_dashboard'))
+
+    return render_template('create_collaborator.html')
+
 @app.route('/admin/users')
 def admin_users():
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
     
     query = request.args.get('query', '')
     users_query = User.query.join(Role).filter(Role.name == 'user')
-    
+
     if query:
-        users = User.query.filter(
+        users_query = users_query.filter(
             (User.name.ilike(f"%{query}%")) |
             (User.email.ilike(f"%{query}%"))
         )
+
     users = users_query.all()
-        
-    return render_template('admin_users.html', users=users, query=query)
+    user_active_reservations = {
+        user.id: Reservation.query.filter_by(user_id=user.id, release_time=None).count() > 0
+        for user in users
+    }
+    return render_template('admin_users.html', users=users, query=query,active_status=user_active_reservations)
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    if session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    user = User.query.get_or_404(user_id)
+
+    # Check for any active reservation
+    active_reservation = Reservation.query.filter_by(user_id=user.id, release_time=None).first()
+    if active_reservation:
+        return "User has an active parking reservation. Please release the spot before deleting."
+
+    # If no active reservation, proceed with deletion
+    Reservation.query.filter_by(user_id=user_id).delete()
+    db.session.delete(user)
+    db.session.commit()
+
+    return redirect(url_for('admin_users'))
+
 
 @app.route('/admin/reservations')
 def admin_reservations():
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     filter_status = request.args.get('status', 'all')
@@ -172,7 +244,7 @@ def admin_reservations():
 
 @app.route('/admin/add_lot', methods=['GET', 'POST'])
 def add_lot():
-    if session.get('user') != 'admin':
+    if session.get('role') != 'admin':
         return redirect(url_for('login'))
 
     if request.method == 'POST':
@@ -199,7 +271,7 @@ def add_lot():
 
 @app.route('/admin/spot/<int:spot_id>/details')
 def spot_details(spot_id):
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     spot = ParkingSpot.query.get_or_404(spot_id)
@@ -211,7 +283,7 @@ def spot_details(spot_id):
 
 @app.route('/admin/lot/<int:lot_id>/spots')
 def view_lot_spots(lot_id):
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     lot = ParkingLot.query.get_or_404(lot_id)
@@ -219,7 +291,7 @@ def view_lot_spots(lot_id):
 
 @app.route('/admin/delete_spot/<int:spot_id>')
 def delete_spot(spot_id):
-    if session.get('user') != 'admin':
+    if session.get('role') != 'admin':
         return redirect(url_for('login'))
 
     spot = ParkingSpot.query.get_or_404(spot_id)
@@ -233,7 +305,7 @@ def delete_spot(spot_id):
 
 @app.route('/admin/delete_lot/<int:lot_id>')
 def delete_lot(lot_id):
-    if session.get('user') != 'admin':
+    if session.get('role') != 'admin':
         return redirect(url_for('login'))
 
     lot = ParkingLot.query.get_or_404(lot_id)
@@ -247,7 +319,7 @@ def delete_lot(lot_id):
 
 @app.route('/admin/search')
 def admin_search():
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     query = request.args.get('query', '')
@@ -263,7 +335,7 @@ def admin_search():
 
 @app.route('/admin/summary')
 def admin_summary():
-    if session.get('user') != 'admin':
+    if session.get('role') not in ['admin', 'collaborator']:
         return redirect(url_for('login'))
 
     lots = ParkingLot.query.all()
@@ -292,6 +364,9 @@ def admin_summary():
 
 @app.route('/user/dashboard')
 def user_dashboard():
+    if session.get('role') != 'user':
+        return redirect(url_for('login'))
+    
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
@@ -306,6 +381,9 @@ def user_dashboard():
 
 @app.route('/user/reserve/<int:lot_id>', methods=['GET', 'POST'])
 def reserve_spot(lot_id):
+    if session.get('role') != 'user':
+        return redirect(url_for('login'))
+    
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
@@ -358,6 +436,9 @@ def release_spot(reservation_id):
 
 @app.route('/user/feedback')
 def user_feedback():
+    if session.get('role') != 'user':
+        return redirect(url_for('login'))
+    
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
@@ -374,6 +455,9 @@ def user_feedback():
 
 @app.route('/user/rating/<int:reservation_id>', methods=['POST'])
 def submit_rating(reservation_id):
+    if session.get('role') != 'user':
+        return redirect(url_for('login'))
+    
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
@@ -395,6 +479,9 @@ def submit_rating(reservation_id):
 
 @app.route('/user/summary')
 def user_summary():
+    if session.get('role') != 'user':
+        return redirect(url_for('login'))
+    
     user_id = session.get('user')
     if not isinstance(user_id, int):
         return redirect(url_for('login'))
@@ -435,7 +522,9 @@ def user_summary():
 @app.route('/logout')
 def logout():
     session.pop('user', None)
+    session.pop('role', None)
     return redirect(url_for('login'))
+
 
 if __name__ == '__main__':
     with app.app_context():

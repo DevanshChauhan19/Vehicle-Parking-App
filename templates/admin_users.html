@@ -12,6 +12,7 @@
             <th>Email</th>
             <th>Address</th>
             <th>Pincode</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -21,6 +22,15 @@
             <td>{{ user.email }}</td>
             <td>{{ user.address }}</td>
             <td>{{ user.pincode }}</td>
+            <td>
+                {% if active_status[user.id] %}
+                    <button class="btn btn-danger btn-sm" disabled>Active Spot</button>
+                {% else %}
+                    <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>

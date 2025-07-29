@@ -24,7 +24,9 @@
             <td>
                 <td>
                     {% if spot.status == 'A' %}
-                        <a href="{{ url_for('delete_spot', spot_id=spot.id) }}" class="btn btn-danger btn-sm">Delete</a>
+                        {% if session['role'] == 'admin' %}
+                            <a href="{{ url_for('delete_spot', spot_id=spot.id) }}" class="btn btn-danger btn-sm">Delete</a>
+                        {% endif %}
                     {% else %}
                         <a href="{{ url_for('spot_details', spot_id=spot.id) }}" class="btn btn-info btn-sm">View Details</a>
                     {% endif %}
